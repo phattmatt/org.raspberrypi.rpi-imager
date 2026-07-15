@@ -1,0 +1,25 @@
+diff --git a/src/linux/platformquirks_linux.cpp b/src/linux/platformquirks_linux.cpp
+--- a/src/linux/platformquirks_linux.cpp
++++ b/src/linux/platformquirks_linux.cpp
+@@ -771,4 +771,10 @@ void bringWindowToForeground(void* windowHandle) {
+ bool hasElevatedPrivileges() {
++    // Flatpak grants access to removable block devices through the active
++    // user's uaccess ACLs and the manifest's --device=all permission. A
++    // sandboxed process cannot become host root via pkexec.
++    if (::access("/.flatpak-info", F_OK) == 0)
++        return true;
++
+     // Check if running as root (UID 0)
+     return ::geteuid() == 0;
+ }
+@@ -805,4 +811,10 @@ const char* getBundlePath() {
+ bool isElevatableBundle() {
++    // /app/bin/rpi-imager exists inside Flatpak, but it is not a host
++    // executable that pkexec can elevate. Keep the native/AppImage policy
++    // installer out of the Flatpak UI and startup path.
++    if (::access("/.flatpak-info", F_OK) == 0)
++        return false;
++
+     const char* path = getBundlePath();
+     // Sanity check: verify the file actually exists
+     return path && access(path, F_OK) == 0;

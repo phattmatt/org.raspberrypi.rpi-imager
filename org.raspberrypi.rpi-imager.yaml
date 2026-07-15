@@ -57,6 +57,10 @@ modules:
           tag-pattern: ^v([\d.]+)$
           is-main-source: true
 
+      # Flatpak uses device ACLs; its sandbox cannot elevate through pkexec
+      - type: patch
+        path: fix-flatpak-authorization.patch
+
       # Pre-populate XZ/LZMA dependency
       - type: git
         url: https://github.com/tukaani-project/xz.git
