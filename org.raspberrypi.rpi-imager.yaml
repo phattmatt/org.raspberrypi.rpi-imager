@@ -52,10 +52,6 @@ modules:
           tag-pattern: ^v([\d.]+)$
           is-main-source: true
 
-      # Avoid rpi-imager's config.h shadowing nghttp2's generated config.h
-      - type: patch
-        path: fix-nghttp2-config-header.patch
-
       # Pre-populate XZ/LZMA dependency
       - type: git
         url: https://github.com/tukaani-project/xz.git
@@ -76,6 +72,10 @@ modules:
         tag: v1.69.0
         commit: 68cb6900fde14c77f0cd7add0e094a862960eb99
         dest: src/_deps/nghttp2-src
+
+      # Avoid rpi-imager's config.h shadowing nghttp2's generated config.h
+      - type: patch
+        path: fix-nghttp2-config-header.patch
 
       # Pre-populate zlib dependency
       - type: git
