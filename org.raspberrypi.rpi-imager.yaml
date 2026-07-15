@@ -20,6 +20,11 @@ finish-args:
   - --system-talk-name=org.freedesktop.UDisks2
 modules:
   - name: rpi-imager
+    build-options:
+      # Qt is built with reduced relocations. Compile the executable as PIC so
+      # exported Qt data (notably QCoreApplication::self) is not copy-relocated.
+      cflags: -fPIC
+      cxxflags: -fPIC
     config-opts:
       - -DENABLE_CHECK_VERSION:BOOL=OFF
       - -DENABLE_TELEMETRY:BOOL=OFF
