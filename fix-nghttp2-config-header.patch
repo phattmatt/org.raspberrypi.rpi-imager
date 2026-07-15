@@ -1,0 +1,15 @@
+diff --git a/src/dependencies/nghttp2.cmake b/src/dependencies/nghttp2.cmake
+--- a/src/dependencies/nghttp2.cmake
++++ b/src/dependencies/nghttp2.cmake
+@@ -14,6 +14,11 @@ if(NOT nghttp2_POPULATED)
+     FetchContent_Populate(nghttp2)
+     add_subdirectory(${nghttp2_SOURCE_DIR} ${nghttp2_BINARY_DIR} EXCLUDE_FROM_ALL)
+ endif()
++
++# Avoid the application's src/config.h shadowing nghttp2's generated
++# config.h, which contains its platform feature detection results.
++target_include_directories(nghttp2_static BEFORE PRIVATE ${nghttp2_BINARY_DIR})
++
+ unset(ENABLE_LIB_ONLY)
+ unset(ENABLE_FAILMALLOC)
+ unset(BUILD_EXAMPLES)

@@ -52,6 +52,10 @@ modules:
           tag-pattern: ^v([\d.]+)$
           is-main-source: true
 
+      # Avoid rpi-imager's config.h shadowing nghttp2's generated config.h
+      - type: patch
+        path: fix-nghttp2-config-header.patch
+
       # Pre-populate XZ/LZMA dependency
       - type: git
         url: https://github.com/tukaani-project/xz.git
