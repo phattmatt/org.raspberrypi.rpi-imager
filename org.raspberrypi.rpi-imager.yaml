@@ -4,6 +4,8 @@ runtime-version: '6.9'
 sdk: org.kde.Sdk
 command: rpi-imager
 rename-icon: rpi-imager
+rename-desktop-file: com.raspberrypi.rpi-imager.desktop
+rename-appdata-file: com.raspberrypi.rpi-imager.metainfo.xml
 finish-args:
   - --device=all
   - --share=ipc
@@ -23,35 +25,38 @@ modules:
       - -DENABLE_TELEMETRY:BOOL=OFF
       - -DCMAKE_BUILD_TYPE=MinSizeRel
       - -DFETCHCONTENT_FULLY_DISCONNECTED=ON
+      - -DGENERATE_TIMEZONES_FROM_IANA=OFF
+      - -DGENERATE_COUNTRIES_FROM_REGDB=OFF
       - -DFETCHCONTENT_SOURCE_DIR_XZ=_deps/xz-src
       - -DFETCHCONTENT_SOURCE_DIR_ZSTD=_deps/zstd-src
       - -DFETCHCONTENT_SOURCE_DIR_NGHTTP2=_deps/nghttp2-src
       - -DFETCHCONTENT_SOURCE_DIR_ZLIB=_deps/zlib-src
       - -DFETCHCONTENT_SOURCE_DIR_LIBARCHIVE=_deps/libarchive-src
+      - -DFETCHCONTENT_SOURCE_DIR_CURL=_deps/curl-src
+      - -DFETCHCONTENT_SOURCE_DIR_LIBUSB=_deps/libusb-src
+      - -DHAVE_LIBZSTD:BOOL=ON
+      - -DHAVE_ZSTD_compressStream:BOOL=ON
+      - -DHAVE_ZSTD_minCLevel:BOOL=ON
     buildsystem: cmake-ninja
     builddir: false
     subdir: src
     post-install:
-      - rm ${FLATPAK_DEST}/share/metainfo/*.metainfo.xml
-      - install -Dm644 -t "${FLATPAK_DEST}/share/metainfo" "../${FLATPAK_ID}.metainfo.xml"
-      - desktop-file-edit --set-key=Exec --set-value='/app/bin/rpi-imager %F' "${FLATPAK_DEST}/share/applications/org.raspberrypi.rpi-imager.desktop"
+      - desktop-file-edit --set-key=Exec --set-value='rpi-imager %u' "${FLATPAK_DEST}/share/applications/com.raspberrypi.rpi-imager.desktop"
     sources:
-      - type: archive
-        url: https://github.com/raspberrypi/rpi-imager/archive/refs/tags/v1.9.6.tar.gz
-        sha256: dbaef70eaeeec7bab95adb677681ef3bdb63c5568b53915fde78276c04421ed3
+      - type: git
+        url: https://github.com/raspberrypi/rpi-imager.git
+        tag: v2.0.10
+        commit: 467be3d3e88f5d83fa78c78788f6e6fdce61a47e
         x-checker-data:
-          type: json
-          url: https://api.github.com/repos/raspberrypi/rpi-imager/releases/latest
-          version-query: .tag_name | sub("^v"; "")
-          timestamp-query: .published_at
-          url-query: |
-            "https://github.com/raspberrypi/rpi-imager/archive/refs/tags/v" + $version + ".tar.gz"
+          type: git
+          tag-pattern: ^v([\d.]+)$
+          is-main-source: true
 
       # Pre-populate XZ/LZMA dependency
       - type: git
         url: https://github.com/tukaani-project/xz.git
-        tag: v5.8.1
-        commit: a522a226545730551f7e7c2685fab27cf567746c
+        tag: v5.8.3
+        commit: 4b73f2ec19a99ef465282fbce633e8deb33691b3
         dest: src/_deps/xz-src
 
       # Pre-populate zstd dependency
@@ -64,24 +69,34 @@ modules:
       # Pre-populate nghttp2 dependency
       - type: git
         url: https://github.com/nghttp2/nghttp2.git
-        tag: v1.66.0
-        commit: ac22e0efe3f82f43c1366961c89a50ee821cfba3
+        tag: v1.69.0
+        commit: 68cb6900fde14c77f0cd7add0e094a862960eb99
         dest: src/_deps/nghttp2-src
 
-      # Pre-populate zlib dependency - use specific commit hash
+      # Pre-populate zlib dependency
       - type: git
         url: https://github.com/madler/zlib.git
-        commit: 5a82f71ed1dfc0bec044d9702463dbdf84ea3b71
+        tag: v1.3.2
+        commit: da607da739fa6047df13e66a2af6b8bec7c2a498
         dest: src/_deps/zlib-src
 
       # Pre-populate libarchive dependency
       - type: git
         url: https://github.com/libarchive/libarchive.git
-        tag: v3.8.1
-        commit: 9525f90ca4bd14c7b335e2f8c84a4607b0af6bdf
+        tag: v3.8.7
+        commit: ded82291ab41d5e355831b96b0e1ff49e24d8939
         dest: src/_deps/libarchive-src
-      - type: file
-        path: org.raspberrypi.rpi-imager.metainfo.xml
 
-      - type: patch
-        path: remove-vendoring.patch
+      # Pre-populate curl dependency
+      - type: git
+        url: https://github.com/curl/curl.git
+        tag: curl-8_20_0
+        commit: a05f34973e6c4bb629d018f7cb51487be1c904d8
+        dest: src/_deps/curl-src
+
+      # Pre-populate libusb dependency
+      - type: git
+        url: https://github.com/libusb/libusb.git
+        tag: v1.0.30
+        commit: 87a55632db62c9bdc58cd31d3ccfa673f1bb017f
+        dest: src/_deps/libusb-src
