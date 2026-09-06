@@ -1,23 +1,24 @@
 # Raspberry Pi Imager Flatpak
 
 This manifest packages **Raspberry Pi Imager v2.0.11.1** as
-`org.raspberrypi.rpi-imager`, using the KDE 6.9 runtime. The upstream release
+`org.raspberrypi.rpi-imager`, using the KDE 6.11 runtime. The upstream release
 and all seven external libraries are pinned by tag and commit.
 
 ## Build and run
 
-Install Flatpak and flatpak-builder, add the Flathub remote, then run:
+Install Flatpak and the host `flatpak-builder` runner, add the Flathub remote,
+then install the official build tools:
 
 ```sh
-flatpak install --user flathub org.kde.Platform//6.9 org.kde.Sdk//6.9
-flatpak-builder --user --force-clean --repo=repo build org.raspberrypi.rpi-imager.yaml
+flatpak install --user flathub org.kde.Platform//6.11 org.kde.Sdk//6.11 org.flatpak.Builder
+flatpak run org.flatpak.Builder --user --force-clean --keep-build-dirs --repo=repo --compose-url-policy=full --mirror-screenshots-url=https://dl.flathub.org/media build org.raspberrypi.rpi-imager.yaml
 flatpak-builder --run build org.raspberrypi.rpi-imager.yaml rpi-imager
 ```
 
 To install the locally built application:
 
 ```sh
-flatpak-builder --user --install --force-clean build org.raspberrypi.rpi-imager.yaml
+flatpak run org.flatpak.Builder --user --install --force-clean build org.raspberrypi.rpi-imager.yaml
 ```
 
 To install a provided bundle, use the same per-user scope as the runtime:
@@ -33,8 +34,8 @@ snapshots included in the upstream source. No build-time network access is
 needed. To verify this after downloading sources:
 
 ```sh
-flatpak-builder --user --download-only build org.raspberrypi.rpi-imager.yaml
-flatpak-builder --user --force-clean --disable-download build org.raspberrypi.rpi-imager.yaml
+flatpak run org.flatpak.Builder --user --download-only build org.raspberrypi.rpi-imager.yaml
+flatpak run org.flatpak.Builder --user --force-clean --disable-download build org.raspberrypi.rpi-imager.yaml
 ```
 
 ## Changes required for 2.x
@@ -58,7 +59,7 @@ already embedded by upstream.
 Upstream's Linux application expects root and uses direct device opens and
 unmount system calls. Flatpak cannot elevate through `pkexec`; `--device=all`
 alone does not grant permission to open host block devices. The Flatpak
-patch and `flatpak-udisks2.h` instead use the host's UDisks2 service to:
+patch (including its `flatpak-udisks2.h` helper) instead uses the host's UDisks2 service to:
 
 - Unmount the selected disk and its partitions in the host mount namespace.
 - Request an authorized read/write descriptor with exclusive access.
@@ -73,13 +74,23 @@ permissions; udev rules inside a Flatpak cannot change those permissions.
 
 Upstream's `com.raspberrypi` desktop file is renamed to the existing
 `org.raspberrypi` Flatpak ID. The launcher retains `%u` and the Pi Connect
-URI association; the session bus permission allows callbacks to reach the
-running instance. The application does not generate a host launcher pointing
-at its sandbox-only `/app/bin` path. Release metadata remains maintained here.
+URI association. The session bus service and interface use the Flatpak ID,
+so callbacks can reach the running instance with the default bus permission. The application does not generate a host launcher pointing
+at its sandbox-only `/app/bin` path. Metadata is generated from upstream’s
+template, with the release version and date derived from the pinned commit.
+The metadata patch adds developer information and HTTPS screenshot URLs.
+License files for the application and external libraries are installed under
+`/app/share/licenses/org.raspberrypi.rpi-imager`.
+
+File selection uses upstream’s desktop portal integration. Static access to
+`/media` and `/run/media` and the accessibility bus wildcard are unnecessary;
+UDisks2 supplies authorized block-device descriptors independently of these
+folder permissions.
 
 ## Validation
 
-After building, check the packaged time-zone resource and mock UDisks2 behavior:
+Build with `--keep-build-dirs` so the helper tests compile the actual patched
+source. After building, check the packaged time-zone resource and mock UDisks2 behavior:
 
 ```sh
 ./tests/run.sh
@@ -108,11 +119,53 @@ an authorization request, write and verify an image with a mounted partition,
 and repeat a write. Check both X11 and Wayland startup and a Pi Connect
 browser callback. Mock tests cannot verify host polkit policy or physical I/O.
 
-Local validation completed on x86_64: offline build; exact-version startup
-against KDE Platform; headless GUI startup and OS catalogue retrieval over
-HTTP/2; host UDisks2 enumeration; mock authorization tests; raw/gzip/xz/zstd
-write and verification; packaged time-zone resource check (432 zones); desktop and AppStream validation. Physical SD-card
-I/O, visible X11/Wayland sessions, browser sign-in, and aarch64 remain untested.
+Run Flathub’s checks on the manifest and exported repository:
+
+```sh
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest org.raspberrypi.rpi-imager.yaml
+flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
+```
+
+If a previous build was exported without screenshot mirroring, regenerate
+its cleanup stage so cached metadata is not reused:
+
+```sh
+flatpak run org.flatpak.Builder --user --force-clean --build-only --keep-build-dirs build org.raspberrypi.rpi-imager.yaml
+flatpak run org.flatpak.Builder --user --finish-only --disable-cache --repo=repo --compose-url-policy=full --mirror-screenshots-url=https://dl.flathub.org/media build org.raspberrypi.rpi-imager.yaml
+```
+
+Validation completed locally on 2026-09-06, x86_64 with KDE 6.11:
+
+- Offline source build with the official Builder; manifest and exported
+  repository lint passed without exceptions.
+- Embedded time-zone list: 432 entries, including Europe/London.
+- Mock UDisks2 authorization, cancellation, unmounting, and descriptor tests.
+- Exact release version and raw/gzip/xz/zstd writes with verification.
+- Headless GUI startup, OS catalogue retrieval over HTTP/2, and introspection
+  of the callback interface under `org.raspberrypi.rpi-imager`.
+- Application and external-library licenses present; screenshot media
+  committed to the exported repository.
+
+The host runner is used for tests because the installed official Builder
+app’s `--run` mode returned status 1 even for a successful empty command on
+this machine. Building and linting with that app succeeded.
+
+## Submission follow-up
+
+The technical changes on this branch were produced with AI assistance,
+including packaging, patches, documentation, and tests. Flathub’s
+[requirements](https://docs.flathub.org/docs/for-app-authors/requirements)
+require disclosure and reserve submission commit messages, PR descriptions,
+and review responses for human authorship. The earlier commit `88ee093` has
+an AI-written message; its suitability or replacement must be resolved by
+the contributor before submission. No submission or exception PR is created
+by these build instructions.
+
+The contributor must complete physical SD-card tests, visible X11/Wayland
+checks, and browser sign-in, and inspect the aarch64 Flathub CI build before
+merging. Consult the current
+[maintenance requirements](https://docs.flathub.org/docs/for-app-authors/maintenance)
+when preparing the update to upstream’s `master` branch.
 
 References: [upstream release](https://github.com/raspberrypi/rpi-imager/releases/tag/v2.0.11.1),
 [earlier Flathub 2.x attempt](https://github.com/flathub/org.raspberrypi.rpi-imager/pull/65),

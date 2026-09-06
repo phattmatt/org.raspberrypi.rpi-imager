@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0
-#include "../flatpak-udisks2.h"
+#include "flatpak-udisks2.h"
 #include <QCoreApplication>
 #include <QTemporaryFile>
 #include <cstdlib>
