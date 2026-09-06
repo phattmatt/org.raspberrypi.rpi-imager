@@ -1,0 +1,140 @@
+--- a/src/linux/platformquirks_linux.cpp
++++ b/src/linux/platformquirks_linux.cpp
+@@ -12,6 +12,7 @@
+  */
+ 
+ #include "../platformquirks.h"
++#include "flatpak-udisks2.h"
+ #include <cstdlib>
+ #include <unistd.h>
+ #include <pwd.h>
+@@ -769,6 +770,10 @@
+ }
+ 
+ bool hasElevatedPrivileges() {
++    // UDisks2 authorizes each device operation; the GUI needs no host root.
++    if (FlatpakUDisks::active())
++        return true;
++
+     // Check if running as root (UID 0)
+     return ::geteuid() == 0;
+ }
+@@ -803,6 +808,9 @@
+ }
+ 
+ bool isElevatableBundle() {
++    if (FlatpakUDisks::active())
++        return false;
++
+     const char* path = getBundlePath();
+     // Sanity check: verify the file actually exists
+     return path && access(path, F_OK) == 0;
+@@ -1560,6 +1568,9 @@
+ }
+ 
+ DiskResult unmountDisk(const QString& device) {
++    if (FlatpakUDisks::active())
++        return FlatpakUDisks::unmountDevice(device) ? DiskResult::Success : DiskResult::Error;
++
+     QByteArray deviceBytes = device.toUtf8();
+     const char* devicePath = deviceBytes.constData();
+     
+@@ -1762,6 +1773,10 @@
+ }
+ 
+ bool registerUriScheme() {
++    // The exported Flatpak desktop file already registers the URI handler.
++    if (FlatpakUDisks::active())
++        return true;
++
+     // $APPIMAGE (set by the AppImage runtime) or the resolved /proc/self/exe.
+     // %u makes the OS pass the rpi-imager:// callback URL as an argument.
+     const char* bundle = getBundlePath();
+--- a/src/linux/file_operations_linux.cpp
++++ b/src/linux/file_operations_linux.cpp
+@@ -4,6 +4,7 @@
+  */
+ 
+ #include "file_operations_linux.h"
++#include "flatpak-udisks2.h"
+ 
+ #include <fcntl.h>
+ #include <unistd.h>
+@@ -261,6 +262,12 @@
+   // is rejected. extraFlags (e.g. O_EXCL) are preserved across that fallback.
+   auto tryOpenWithFlags = [&](int extraFlags) -> FileError {
+     int flags = O_RDWR | extraFlags;
++    if (isBlockDevice && FlatpakUDisks::active()) {
++      // Open once through the host, buffered initially. Direct I/O can be
++      // enabled on the same descriptor later, without reauthorization.
++      using_direct_io_ = false;
++      return OpenInternal(path.c_str(), flags);
++    }
+     if (isBlockDevice) {
+       flags |= O_DIRECT;
+       using_direct_io_ = true;
+@@ -286,7 +293,7 @@
+   // device), fall back to a shared open so the write still proceeds.
+   FileError result = tryOpenWithFlags(isBlockDevice ? O_EXCL : 0);
+   opened_exclusive_ = (result == FileError::kSuccess && isBlockDevice);
+-  if (result != FileError::kSuccess && isBlockDevice) {
++  if (result != FileError::kSuccess && isBlockDevice && !FlatpakUDisks::active()) {
+     int err = last_error_code_;
+     if (err == EBUSY || err == EACCES || err == EPERM) {
+       Log("Exclusive (O_EXCL) open failed with errno " + std::to_string(err) +
+@@ -412,6 +419,17 @@
+     return FileError::kSuccess;
+   }
+   
++  if (FlatpakUDisks::active()) {
++    // Preserve the host-authorized descriptor and its exclusive lock.
++    const int flags = fcntl(fd_, F_GETFL);
++    if (flags < 0 || fcntl(fd_, F_SETFL, enabled ? (flags | O_DIRECT) : (flags & ~O_DIRECT)) < 0) {
++      last_error_code_ = errno;
++      return FileError::kOpenError;
++    }
++    using_direct_io_ = enabled;
++    return FileError::kSuccess;
++  }
++
+   // Save current position before reopening
+   off_t currentPos = lseek(fd_, 0, SEEK_CUR);
+   std::string savedPath = current_path_;
+@@ -456,7 +474,11 @@
+ FileError LinuxFileOperations::OpenInternal(const char* path, int flags, mode_t mode) {
+   Close();
+ 
+-  fd_ = open(path, flags, mode);
++  struct stat st;
++  if (FlatpakUDisks::active() && stat(path, &st) == 0 && S_ISBLK(st.st_mode))
++    fd_ = FlatpakUDisks::openDevice(path, flags);
++  else
++    fd_ = open(path, flags, mode);
+   if (fd_ < 0) {
+     last_error_code_ = errno;
+     return FileError::kOpenError;
+--- a/src/main.cpp
++++ b/src/main.cpp
+@@ -236,6 +236,8 @@
+ 
+     app.setOrganizationName("Raspberry Pi");
+     app.setOrganizationDomain("raspberrypi.com");
++    if (!qEnvironmentVariableIsEmpty("FLATPAK_ID"))
++        app.setDesktopFileName(qEnvironmentVariable("FLATPAK_ID"));
+     app.setApplicationName("Raspberry Pi Imager");
+     app.setApplicationVersion(ImageWriter::staticVersion());
+     app.setWindowIcon(QIcon(":/icons/rpi-imager.ico"));
+--- a/src/downloadthread.cpp
++++ b/src/downloadthread.cpp
+@@ -384,7 +384,10 @@
+         QProcess::execute("open", args);
+         emit error(msg);
+ #elif defined(Q_OS_LINUX)
+-        emit error(tr("Cannot open storage device '%1'. Please run with elevated privileges (sudo).").arg(QString(_filename)));
++        if (QFile::exists("/.flatpak-info"))
++            emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));
++        else
++            emit error(tr("Cannot open storage device '%1'. Please run with elevated privileges (sudo).").arg(QString(_filename)));
+ #else
+         emit error(tr("Cannot open storage device '%1'.").arg(QString(_filename)));
+ #endif
