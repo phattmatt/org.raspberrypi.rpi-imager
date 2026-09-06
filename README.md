@@ -150,6 +150,23 @@ The host runner is used for tests because the installed official Builder
 app’s `--run` mode returned status 1 even for a successful empty command on
 this machine. Building and linting with that app succeeded.
 
+Fedora 44 Workstation was also checked on 2026-09-06 in a VMware x86_64 VM.
+The previously installed KDE 6.9 package (`7b03adce6183`) crashed in Qt's
+Wayland startup and contained Qt copy relocations, including
+`QCoreApplication::self`. The current package (`976e5ec57c9a`, KDE 6.11)
+passed a 30-second Wayland startup check with the normal VMware OpenGL
+renderer, fetched the OS catalogue, and stayed running on a subsequent
+normal launch. No new coredump was recorded. This verifies startup only;
+interactive workflows and physical writes still need testing.
+
+`tests/run.sh` includes a binary relocation guard. It requires host
+`readelf` (binutils) and rejects Qt copy relocations to catch omission of
+the `-fPIC` build options. It can also check an installed executable:
+
+```sh
+python3 tests/relocations.py /path/to/rpi-imager
+```
+
 ## Submission follow-up
 
 The technical changes on this branch were produced with AI assistance,

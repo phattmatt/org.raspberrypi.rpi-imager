@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 set -eu
 cd "$(dirname "$0")/.."
+python3 tests/relocations.py
 test -f .flatpak-builder/build/rpi-imager/src/linux/flatpak-udisks2.h || {
     echo "Build with --keep-build-dirs before running the helper tests" >&2
     exit 1
