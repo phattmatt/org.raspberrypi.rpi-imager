@@ -114,10 +114,10 @@ with verification into temporary regular files:
 flatpak-builder --run build org.raspberrypi.rpi-imager.yaml python3 tests/smoke.py
 ```
 
-Before publishing, also test with a disposable SD card: enumerate it, cancel
-an authorization request, write and verify an image with a mounted partition,
-and repeat a write. Check both X11 and Wayland startup and a Pi Connect
-browser callback. Mock tests cannot verify host polkit policy or physical I/O.
+Beyond the successful manual write tests recorded below, confirm cancellation
+of an authorization request, writing with a mounted partition, and repeated
+writes using a disposable SD card. Check X11 startup and a Pi Connect browser
+callback. Mock tests cannot verify host polkit policy or physical I/O.
 
 Run Flathub’s checks on the manifest and exported repository:
 
@@ -156,8 +156,23 @@ Wayland startup and contained Qt copy relocations, including
 `QCoreApplication::self`. The current package (`976e5ec57c9a`, KDE 6.11)
 passed a 30-second Wayland startup check with the normal VMware OpenGL
 renderer, fetched the OS catalogue, and stayed running on a subsequent
-normal launch. No new coredump was recorded. This verifies startup only;
-interactive workflows and physical writes still need testing.
+normal launch. No new coredump was recorded. This automated check covers
+startup; the subsequent manual write results are recorded below.
+
+The contributor reports successful image writing and completed verification
+on all three systems:
+
+| System | Architecture confirmed for this test | Result |
+| --- | --- | --- |
+| Ubuntu 24.04 | Not specified | Write and verification passed |
+| Fedora 44 | Not specified | Write and verification passed |
+| Raspberry Pi OS | ARM64 (aarch64) | Flatpak write and verification passed |
+
+These are contributor-reported functional results, including a successful
+ARM64 Flatpak run. The exact package commits, storage devices, image formats,
+and display protocols were not recorded for these manual tests. They do not
+establish coverage of cancellation, mounted partitions, repeated writes,
+or Pi Connect sign-in.
 
 `tests/run.sh` includes a binary relocation guard. It requires host
 `readelf` (binutils) and rejects Qt copy relocations to catch omission of
@@ -178,9 +193,10 @@ an AI-written message; its suitability or replacement must be resolved by
 the contributor before submission. No submission or exception PR is created
 by these build instructions.
 
-The contributor must complete physical SD-card tests, visible X11/Wayland
-checks, and browser sign-in, and inspect the aarch64 Flathub CI build before
-merging. Consult the current
+Remaining validation covers the specific storage scenarios above, X11
+startup, and browser sign-in. Inspect the aarch64 Flathub CI build before
+merging; the successful ARM64 manual test does not replace that CI check.
+Consult the current
 [maintenance requirements](https://docs.flathub.org/docs/for-app-authors/maintenance)
 when preparing the update to upstream’s `master` branch.
 
